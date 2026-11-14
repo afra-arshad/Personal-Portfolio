@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import LogoLoop from "./LogoLoop";
 import AnimatedList from "./AnimatedList";
@@ -19,11 +18,37 @@ import {
   SiVercel,
 } from "react-icons/si";
 
-/* ---------- Typing helpers ---------- */
+/* ---------- Typing & Viewport helpers ---------- */
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+// Re-triggerable observer: increments key/counter every time the element enters view
+const useRepeatingInView = (threshold = 0.5) => {
+  const ref = useRef(null);
+  const [inViewKey, setInViewKey] = useState(0);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInViewKey((prev) => prev + 1);
+        }
+      },
+      { threshold }
+    );
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [threshold]);
+
+  return [ref, inViewKey];
+};
 
 const useInView = (threshold = 0.5) => {
   const ref = useRef(null);
@@ -53,18 +78,17 @@ const useInView = (threshold = 0.5) => {
 
 const useTyping = (
   total,
-  { speed = 40, delay = 0, active = true } = {}
+  { speed = 40, delay = 0, triggerKey = 1 } = {}
 ) => {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    if (!active) return;
-
     if (prefersReducedMotion()) {
       setCount(total);
       return;
     }
 
+    setCount(0); // Reset count on trigger change
     let interval;
 
     const start = setTimeout(() => {
@@ -84,12 +108,34 @@ const useTyping = (
       clearTimeout(start);
       clearInterval(interval);
     };
-  }, [active, total, speed, delay]);
+  }, [triggerKey, total, speed, delay]);
 
   return count;
 };
 
 const HEADING = "Tech Skills";
+
+/* ---------- 3D Heading Shadow ---------- */
+
+const HEADING_SHADOW = [
+  "1px 1px 0 #b65b82",
+  "2px 2px 0 #a44870",
+  "3px 3px 0 #91365f",
+  "4px 4px 0 #762747",
+  "5px 5px 0 #5e1c38",
+  "6px 6px 0 #421329",
+  "8px 10px 15px rgba(0,0,0,0.6)",
+  "0 0 20px rgba(217,152,182,0.35)",
+].join(", ");
+
+/* ---------- Typing Cursor ---------- */
+
+const Cursor = ({ className = "ml-2 h-[0.9em] w-[3px]" }) => (
+  <span
+    aria-hidden="true"
+    className={`inline-block animate-pulse bg-[#d98cb3] align-middle motion-reduce:animate-none ${className}`}
+  />
+);
 
 /* ---------- Technology logos ---------- */
 
@@ -141,12 +187,13 @@ const extras = [
 ];
 
 export default function TechStack() {
-  const [headRef, headInView] = useInView(0.5);
+  const [headRef, headInViewKey] = useRepeatingInView(0.5);
   const [skillsRef, skillsInView] = useInView(0.2);
 
+  // Typing hook for the main heading that replays every time it comes into view
   const headCount = useTyping(HEADING.length, {
     speed: 90,
-    active: headInView,
+    triggerKey: headInViewKey,
   });
 
   const [activeSkill, setActiveSkill] = useState(-1);
@@ -176,44 +223,46 @@ export default function TechStack() {
   return (
     <section
       id="tech-stack"
+      aria-labelledby="tech-stack-heading"
       className="mx-auto -mt-3 max-w-full bg-gradient-to-r from-[#1e0e13] via-[#1c0c11] to-[#150c0f] px-6 py-16 text-[#f1e4ea]"
     >
-      {/* Animated heading */}
-      <div ref={headRef} className="mb-6 flex items-center gap-5">
-        <span className="h-1 w-16 bg-[#8e2f5e]" />
-
+      {/* 3D Animated Centered Heading (Replays typing on every scroll into view) */}
+      <div
+        ref={headRef}
+        className="mb-12 flex items-center justify-center sm:mb-16"
+      >
         <h2
+          id="tech-stack-heading"
           aria-label={HEADING}
-          className="min-h-[1.5em] font-mono text-2xl font-bold uppercase tracking-[0.25em] text-[#d98cb3] md:text-3xl"
+          className="inline-block min-h-[1.5em] select-none font-mono text-4xl font-black uppercase tracking-[0.15em] text-[#f2c4d8] sm:text-5xl lg:text-6xl"
           style={{
-            textShadow: "0 8px 6px rgba(168, 65, 111, 0.35)",
+            textShadow: HEADING_SHADOW,
           }}
         >
+          <span className="sr-only">{HEADING}</span>
+
           <span aria-hidden="true">
             {HEADING.slice(0, headCount)}
           </span>
 
-          {headCount < HEADING.length && (
-            <span
-              aria-hidden="true"
-              className="ml-1 inline-block h-[0.9em] w-[3px] animate-pulse bg-[#d98cb3] align-middle"
-            />
-          )}
+          {headCount < HEADING.length && <Cursor />}
         </h2>
       </div>
 
       {/* Introduction */}
-      <h3 className="mb-3 text-3xl md:text-4xl">
-        Tools I build with{" "}
-        <span className="text-[#a8416f]">every day</span>
-      </h3>
+      <div className="mx-auto max-w-5xl text-center">
+        <h3 className="mb-3 text-3xl md:text-4xl">
+          Tools I build with{" "}
+          <span className="text-[#a8416f]">every day</span>
+        </h3>
 
-      <p className="mb-10 text-[#a08a93]">
-        Technologies I use to build responsive and modern websites.
-      </p>
+        <p className="mb-10 text-[#a08a93]">
+          Technologies I use to build responsive and modern websites.
+        </p>
+      </div>
 
       {/* Moving technology logos */}
-      <div className="relative h-24 overflow-hidden text-[#d98cb3]">
+      <div className="relative mx-auto max-w-5xl h-24 overflow-hidden text-[#d98cb3]">
         <LogoLoop
           logos={techLogos}
           speed={80}
@@ -227,15 +276,18 @@ export default function TechStack() {
       </div>
 
       {/* Skills and tools */}
-      <div className="mt-14 grid gap-10 md:grid-cols-2">
+      <div className="mx-auto mt-14 max-w-5xl grid gap-10 md:grid-cols-2">
         {/* Sequential animated skills */}
         <div
           ref={skillsRef}
           className="rounded-2xl border border-[#8e2f5e]/25 bg-[#200e15]/40 p-5"
         >
-          <h4 className="mb-5 text-xl font-semibold text-[#f1e4ea]">
+          <h3
+            className="mb-6 text-center font-mono text-2xl font-bold uppercase tracking-[0.12em] text-[#f2c4d8]"
+            style={{ textShadow: "1px 1px 0 #91365f, 2px 2px 0 #5e1c38" }}
+          >
             Skills
-          </h4>
+          </h3>
 
           <div className="space-y-7">
             {skills.map((skill, index) => (
@@ -253,9 +305,12 @@ export default function TechStack() {
 
         {/* Tools and deployment */}
         <div>
-          <h4 className="mb-5 text-xl font-semibold text-[#f1e4ea]">
-            Tools &amp; Deployment
-          </h4>
+          <h3
+            className="mb-6 text-center font-mono text-2xl font-bold uppercase tracking-[0.12em] text-[#f2c4d8]"
+            style={{ textShadow: "1px 1px 0 #91365f, 2px 2px 0 #5e1c38" }}
+          >
+            Tools & Deployment
+          </h3>
 
           <AnimatedList
             items={toolItems}
@@ -279,12 +334,15 @@ export default function TechStack() {
       </div>
 
       {/* Additional strengths */}
-      <div className="mt-14">
-        <h4 className="mb-5 text-xl font-semibold text-[#f1e4ea]">
+      <div className="mx-auto mt-14 max-w-5xl text-center">
+        <h3
+          className="mb-6 text-center font-mono text-2xl font-bold uppercase tracking-[0.12em] text-[#f2c4d8]"
+          style={{ textShadow: "1px 1px 0 #91365f, 2px 2px 0 #5e1c38" }}
+        >
           Also Good At
-        </h4>
+        </h3>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           {extras.map((item) => (
             <span
               key={item}
